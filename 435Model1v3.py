@@ -8,8 +8,8 @@
 ###############################################################################
 
 ### IMPORTS ###################################################################
-# uses pyomo library for optimization modelling
-import pyomo.environ as pyo
+import pyomo.environ as pyo  # uses pyomo library for optimization modelling
+from pyomo.contrib.sensitivity_toolbox.sens import sipopt
 from random import seed
 from random import randint
 from collections import defaultdict
