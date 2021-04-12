@@ -3,7 +3,7 @@
 ###                          Markus Hamann (20666067)                       ###
 ###                          Brandon Hayes (20675177)                       ###
 ###                           Developed 26March2021                         ###
-###                            Revised 08Apr2021                            ###
+###                            Revised 09Apr2021                            ###
 ###                          SET PACKING FORMULATION                        ###
 ###############################################################################
 
@@ -13,6 +13,7 @@ from pyomo.contrib.sensitivity_toolbox.sens import sipopt
 from random import seed
 from random import randint
 from collections import defaultdict
+import time
 
 
 # FIND SCHEDULES THAT ARE BETTER THAN THE CURRENT ONE
@@ -60,8 +61,10 @@ def runHeuristic(possibleSchedules, usedSchedules, hideScheduleDetails):
 
 # GENERATE FEASIBLE SOLUTIONS USING THE BACKPACK ALGORITHM
 def runBackpackAlgorithm():
+    start_time = time.time()
     # LOCAL FUNCTIONS
     # Objective Function
+
     def obj_func(model):
         return sum(model.X[t]*model.w[t] for t in model.T)
 
@@ -119,6 +122,7 @@ def runBackpackAlgorithm():
 
         schedules.append(options)
 
+    print(f'It took {time.time()-start_time} to find the feasible options.')
     return schedules  # These are the feabile schedules used later on
 
 

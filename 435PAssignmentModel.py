@@ -2,8 +2,8 @@
 ###                        MSCI 435 FINAL TERM PROJECT                      ###
 ###                          Markus Hamann (20666067)                       ###
 ###                          Brandon Hayes (20675177)                       ###
-###                           Developed 26March2021                         ###
-###                            Revised 08Apr2021                            ###
+###                           Developed 09March2021                         ###
+###                            Revised 09Apr2021                            ###
 ###                          SET PACKING FORMULATION                        ###
 ###############################################################################
 
@@ -57,117 +57,59 @@ def runHeuristic(possibleSchedules, usedSchedules, hideScheduleDetails):
         print(f"{possibleSchedules[scheduleNo]}")
     print("\n\n")
 
-
-# GENERATE FEASIBLE SOLUTIONS USING THE BACKPACK ALGORITHM
-def runBackpackAlgorithm():
-    # LOCAL FUNCTIONS
-    # Objective Function
-    def obj_func(model):
-        return sum(model.X[t]*model.w[t] for t in model.T)
-
-    # Constraint Generation
-    def humanContactConstraint(model, T):
-        # Human Contact Limit
-        V = 20
-        return sum(model.X[t]*model.c[t] for t in model.T) <= V
-
-    schedules = []  # array of schedules, _ is an invisible variable for iterations
-    print("Please be patient while possible schedules are generated...")
-    for _ in range(1, 100):
-        # generate some integers for weighting
-        value1 = randint(0, 10000)
-        value2 = randint(0, 10000)
-        value3 = randint(0, 10000)
-        value4 = randint(0, 10000)
-
-        seed(value1)
-
-        factors = {1: 7, 2: 7, 3: 10, 4: 10}
-        weight = {1: value1, 2: value2, 3: value3, 4: value4}
-
-        # Model intialization
-        model = pyo.ConcreteModel()
-
-        # Indexes for timeslots t
-        # Number of time slots
-        t = 4
-        model.T = pyo.RangeSet(t)
-
-        # Parameter variable xt
-        model.X = pyo.Var(model.T, within=pyo.Binary)
-
-        # Item sizes matrix ct
-        model.c = pyo.Param(
-            model.T, initialize=factors, default=0)
-
-        # Item weights matrix
-        model.w = pyo.Param(
-            model.T, initialize=weight, default=0)
-
-        model.objective = pyo.Objective(rule=obj_func, sense=pyo.maximize)
-
-        model.const1 = pyo.Constraint(model.T, rule=humanContactConstraint)
-
-        # Solves knapsack using Gurobi
-        solver = pyo.SolverFactory('gurobi')
-        solver.solve(model, tee=False)
-
-        options = []
-        for i in list(model.X.keys()):
-            if model.X[i]() != 0:
-                options.append(i)
-
-        schedules.append(options)
-
-    return schedules  # These are the feabile schedules used later on
-
-
 # MAIN ASSIGNMENT ALGORITHM FOR FINDING SCHEDULES
-def runAssignmentAlgorithm(schedules, hideScheduleDetails):
+
+
+def runAssignmentAlgorithm():
     # LOCAL FUNCTIONS
     # Objective Function
     def obj_func(model):
         return sum(sum(sum(sum(
-            model.Ph * model.G[t, r, d, h] for t in model.T
+            model.Ph[h-1] * model.G[t, r, d, h] for t in model.T
         ) for r in model.R) for d in model.D) for h in model.H)
 
     def eventConstraints(model):
-        # LOCAL VARIABLES FOR SIMPLICITY
-        model.iterative_constraint = pyo.ConstraintList()
-        G = model.G
-        S = model.S
-        T = model.T
-        R = model.R
-        D = model.D
-        H = model.H
-        Q = model.Q
-        X = model.X
 
         # Constraint 1
-        model.iterative_constraint.add(
-            (sum(G[T, r, D, H] + S[T, r, D, Q]) for r in R) <= 1)
+        def rule_const1(model, T, D, H, Q):
+            return sum((model.G[T, r, D, H] + model.S[T, r, D, Q]) for r in model.R) <= 10
+
+        model.const1 = pyo.Constraint(
+            model.T, model.D, model.H, model.Q, rule=rule_const1)
 
         # Constraint 2
-        model.iterative_constraint.add(X[T, T] == 1)  # is this one wrong?
+        def rule_const2(model, T):
+            return (model.X[T, T]) == 1
+
+        model.const2 = pyo.Constraint(
+            model.T, rule=rule_const2)
 
         # Constraint 3
-        model.iterative_constraint.add((sum(S[T, R, d, Q]) for d in D) >= 1)
+        def rule_const3(model, T, R, Q):
+            return sum((model.S[T, R, d, Q]) for d in model.D) >= 1
+
+        model.const3 = pyo.Constraint(
+            model.T, model.R, model.Q, rule=rule_const3)
 
         # Constraint 4
-        model.iterative_constraint.add((sum(G[t, R, D, H]) for t in T) >= 2)
+        def rule_const4(model, R, D, H):
+            return sum(model.G[t, R, D, H] for t in model.T) >= 2
+
+        model.const4 = pyo.Constraint(
+            model.R, model.D, model.H, rule=rule_const4)
 
         # Constraint 5
-        model.iterative_constraint.add((sum(G[T, r, D, H]) for r in R) <= 1)
+        def rule_const5(model, T, D, H):
+            return sum(model.G[T, r, D, H] for r in model.R) <= 1
 
-    # Arrange into dictionary with unique identifier for each packing
-    possibleSchedules = {'Schedule_' + str(i): schedules[i]
-                         for i in range(1, len(schedules))}
+        model.const5 = pyo.Constraint(
+            model.T, model.D, model.H, rule=rule_const5)
 
     model = pyo.ConcreteModel()
 
     # PARAMETERS
     # penalty associated with running games at bad times
-    model.Ph = [100, 100, 0, 50]
+    model.Ph = [100, 100, 50, 0]
     model.T = pyo.RangeSet(12)  # set of teams
     model.R = pyo.RangeSet(6)  # set of rinks
     model.D = pyo.RangeSet(6)  # set of days
@@ -201,20 +143,38 @@ def runAssignmentAlgorithm(schedules, hideScheduleDetails):
     print(result)  # usually don't need to print
 
     print("\nChosen Schedules by Assignment Algorithm:\n")
-    # l = list(model.A.keys())
-    # usedSchedules = {}
-    # solutionCanBeImproved = False
-    # for scheduleNo in l:
-    #     if model.A[scheduleNo]() != 0:
-    #         usedSchedules[scheduleNo] = possibleSchedules[scheduleNo]
-    #         print(scheduleNo)
-    #         print(possibleSchedules[scheduleNo])
-    #         firstValue = (usedSchedules.get(scheduleNo))[0]
-    #         secondValue = (usedSchedules.get(scheduleNo))[1]
-    #         if ((firstValue == 1 or firstValue == 2) and secondValue == 3):
-    #             solutionCanBeImproved = True
+    G = list(model.G.keys())  # games
+    S = list(model.S.keys())  # practice
+    M = list(model.X.keys())  # match-ups
 
-    return [possibleSchedules]
+    matchupDict = {}
+    for i in M:
+        if model.X[i]() != 0 and model.X[i]() != None:
+            if i[0] not in matchupDict:
+                matchupDict[i[0]] = list()
+            matchupDict[i[0]].append(i[1])
+            print(
+                f"Team {i[0]} has been matched with Team {i[1]}")
+
+    gamesDict = {}
+    for g in G:
+        if model.G[g]() != 0 and model.G[g]() != None:
+            if g[0] not in gamesDict:
+                gamesDict[g[0]] = list()
+            gamesDict[g[0]].append(g[1])
+            print(
+                f"Team {g[0]} is playing with Team {g[1]}")
+
+    practiceDict = {}
+    for p in S:
+        if model.S[p]() != 0 and model.S[p]() != None:
+            if p[0] not in practiceDict:
+                practiceDict[p[0]] = list()
+            practiceDict[p[0]].append(p[1])
+            print(
+                f"Team {p[0]} is practicing with Team {p[1]}")
+
+    return [matchupDict, gamesDict, practiceDict]
 
 # Determines if a schedule can be improved and runs heuristic
 
@@ -229,61 +189,21 @@ def canBeImproved(solutionCanBeImproved, possibleSchedules, usedSchedules, hideS
 
 
 def main():
-    hideScheduleDetails = True  # used to hide additional print statements
     print("INITIATING MODEL TO GENERATE OPTIMAL GAME SCHEDULE")
     print("In the meanwhile, remember that Brandon & Markus are stellar professionals...\n\n")
 
     # GENERATE FEASIBLE SCHEDULES
-    feasibleSchedules = runBackpackAlgorithm()
+    #feasibleSchedules = runBackpackAlgorithm()
 
     # RUN SET PACKING ALGORITHM TO FIND FEASIBLE SCHEDULE FOR ROUND ROBIN
     print("HERE IS AN OPTIMAL ROUND ROBIN SCHEDULE")
-    result = runAssignmentAlgorithm(
-        feasibleSchedules, hideScheduleDetails)  # 6 games, 4 practices
-    possibleSchedules = result[0]  # for readibility
-    print(possibleSchedules)
-    # usedSchedules = result[1]  # for readibility
-    # solutionCanBeImproved = result[2]  # for readibility
-
-    # # improve schedule if can be improved
-    # canBeImproved(solutionCanBeImproved, possibleSchedules,
-    #               usedSchedules, hideScheduleDetails)
-
-    # # RUN SET PACKING ALGORITHM TO FIND FEASIBLE SCHEDULE FOR PLAYOFF ROUND 1
-    # print("HERE IS THE OPTIMAL ROUND 1 PLAYOFF SCHEDULE")
-    # result = runSetPackingAlgorithm(
-    #     feasibleSchedules, 2, 2, hideScheduleDetails)  # 2 games, 2 practices
-    # possibleSchedules = result[0]  # for readibility
-    # usedSchedules = result[1]  # for readibility
-    # solutionCanBeImproved = result[2]  # for readibility
-
-    # # improve schedule if can be improved
-    # canBeImproved(solutionCanBeImproved, possibleSchedules,
-    #               usedSchedules, hideScheduleDetails)
-
-    # # RUN SET PACKING ALGORITHM TO FIND FEASIBLE SCHEDULE FOR PLAYOFF ROUND 2
-    # print("HERE IS THE OPTIMAL ROUND 2 PLAYOFF SCHEDULE")
-    # result = runSetPackingAlgorithm(
-    #     feasibleSchedules, 2, 2, hideScheduleDetails)  # 2 games, 2 practices
-    # possibleSchedules = result[0]  # for readibility
-    # usedSchedules = result[1]  # for readibility
-    # solutionCanBeImproved = result[2]  # for readibility
-
-    # # improve schedule if can be improved
-    # canBeImproved(solutionCanBeImproved, possibleSchedules,
-    #               usedSchedules, hideScheduleDetails)
-
-    # # RUN SET PACKING ALGORITHM TO FIND FEASIBLE SCHEDULE FOR PLAYOFF ROUND 3
-    # print("HERE IS THE OPTIMAL ROUND 3 PLAYOFF SCHEDULE")
-    # result = runSetPackingAlgorithm(
-    #     feasibleSchedules, 2, 2, hideScheduleDetails)  # 2 games, 2 practices
-    # possibleSchedules = result[0]  # for readibility
-    # usedSchedules = result[1]  # for readibility
-    # solutionCanBeImproved = result[2]  # for readibility
-
-    # # improve schedule if can be improved
-    # canBeImproved(solutionCanBeImproved, possibleSchedules,
-    #               usedSchedules, hideScheduleDetails)
+    result = runAssignmentAlgorithm()  # 6 games, 4 practices
+    possibleMatchups = result[0]  # for readibility
+    possibleGames = result[1]  # for readibility
+    possiblePractices = result[2]  # for readibility
+    print(f'Matchups: {possibleMatchups}')
+    print(f'Games: {possibleGames}')
+    print(f'Practices: {possiblePractices}')
 
 
 # This ensures that all functions are read before running.

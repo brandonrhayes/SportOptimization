@@ -248,7 +248,7 @@ def main():
     # RUN SET PACKING ALGORITHM TO FIND FEASIBLE SCHEDULE FOR ROUND ROBIN
     print("HERE IS THE OPTIMAL ROUND ROBIN SCHEDULE")
     result = runSetPackingAlgorithm(
-        feasibleSchedules, 6, 4, hideScheduleDetails)  # 6 games, 4 practices
+        feasibleSchedules, 768, 512, hideScheduleDetails)  # 6 games, 4 practices
     possibleSchedules = result[0]  # for readibility
     usedSchedules = result[1]  # for readibility
     solutionCanBeImproved = result[2]  # for readibility
